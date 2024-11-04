@@ -1,0 +1,19 @@
+[package]
+name = "mdast"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py38"] }
+serde_json = "1.0.132"
+
+# markdown = {version = "1.0.0-alpha.21", features = ["json"]}
+# rev = commit, has to be the same for markdown and mdast_util_to_markdown !
+markdown = { git = "https://github.com/wooorm/markdown-rs", rev = "9ed45b41d5a3b8c9924da358cbd0b60c36c59759", features = ["json"] }
+mdast_util_to_markdown = { git = "https://github.com/wooorm/markdown-rs", rev = "9ed45b41d5a3b8c9924da358cbd0b60c36c59759" }
+
+[lib]
+name = "mdast"
+# "cdylib" is necessary to produce a shared library for Python to import from.
+crate-type = ["cdylib"]
+
