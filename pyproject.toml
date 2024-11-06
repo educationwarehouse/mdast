@@ -11,5 +11,6 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-    "maturin[zig]"
+    "maturin[zig]",
+    "pip",
 ]
