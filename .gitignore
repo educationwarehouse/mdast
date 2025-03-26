@@ -2,5 +2,5 @@
 .idea
 target/
 *.so
-&.pyc
+*.pyc
 __pycache__
