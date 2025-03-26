@@ -1,4 +1,5 @@
 import mdast
+from mdast import GenerationOptions
 
 
 def main():
@@ -37,6 +38,8 @@ $$
         math_text=True,
         math_flow=True,
     )
+    # alternative:
+    # parse_options = mdast.ParseOptions.gfm()
 
     # Custom markdown options
     markdown_options = mdast.MarkdownOptions(
@@ -68,6 +71,16 @@ $$
     custom_list = mdast.ast_to_md(mdast.md_to_ast(original_list), markdown_options)
     print(f"Original list:\n{original_list}")
     print(f"Custom list (with bullet '+' and 'tab' indent):\n{custom_list}")
+
+    html_config = GenerationOptions(
+        allow_dangerous_html=True,
+    )
+    print(
+        # or json_to_html('...'), ast_to_html(ast),
+        mdast.md_to_html("# Hi how are you<script>alert()</script>"),
+        mdast.md_to_html("# Hi how are you<script>alert()</script>", html_config),
+    )
+
 
 if __name__ == "__main__":
     main()

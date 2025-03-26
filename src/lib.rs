@@ -1,5 +1,7 @@
 use markdown::mdast::Node;
-use markdown::{to_mdast, Constructs, ParseOptions};
+use markdown::{
+    to_html_with_options, to_mdast, CompileOptions, Constructs, LineEnding, ParseOptions,
+};
 use mdast_util_to_markdown::{to_markdown_with_options, IndentOptions};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::{pyfunction, pymodule, PyModule, PyModuleMethods, PyResult};
@@ -35,6 +37,7 @@ impl FromPy for ParseOptions {
 /// https://docs.rs/markdown/1.0.0-alpha.23/markdown/struct.ParseOptions.html
 /// https://docs.rs/markdown/1.0.0-alpha.23/markdown/struct.Constructs.html
 struct PyParseOptions {
+    // todo: support `variant` (commonmark/gfm/mdx)
     gfm_strikethrough_single_tilde: bool,
     math_text_single_dollar: bool,
     attention: bool,
@@ -259,11 +262,118 @@ fn ast_to_md(
     to_markdown_py(&tree, config)
 }
 
+#[derive(Deserialize, Serialize, Debug, Default)]
+/// https://docs.rs/markdown/1.0.0-alpha.23/markdown/struct.CompileOptions.html
+struct PyCompileOptions {
+    allow_dangerous_html: bool,
+    allow_dangerous_protocol: bool,
+    default_line_ending: String,
+    gfm_footnote_label: Option<String>,
+    gfm_footnote_label_tag_name: Option<String>,
+    gfm_footnote_label_attributes: Option<String>,
+    gfm_footnote_back_label: Option<String>,
+    gfm_footnote_clobber_prefix: Option<String>,
+    gfm_task_list_item_checkable: bool,
+    gfm_tagfilter: bool,
+}
+
+impl FromPy for CompileOptions {
+    fn from_py(config: Option<Bound<PyAny>>) -> Self {
+        let mut compile_options = CompileOptions::default();
+
+        if let Some(config) = config {
+            match from_pyobject::<PyCompileOptions, _>(config) {
+                Ok(config) => compile_options = config.into(),
+                Err(e) => {
+                    eprintln!("Error parsing compile config: {e}")
+                }
+            }
+        }
+
+        compile_options
+    }
+}
+
+impl From<PyCompileOptions> for CompileOptions {
+    fn from(value: PyCompileOptions) -> Self {
+        let default_line_ending: LineEnding = match value.default_line_ending.as_ref() {
+            "\n" => LineEnding::LineFeed,
+            "\r\n" => LineEnding::CarriageReturnLineFeed,
+            "\r" => LineEnding::CarriageReturn,
+            _ => unimplemented!("Unsupported `default_line_ending`"),
+        };
+
+        Self {
+            allow_dangerous_html: value.allow_dangerous_html,
+            allow_dangerous_protocol: value.allow_dangerous_protocol,
+            default_line_ending,
+            gfm_footnote_label: value.gfm_footnote_label,
+            gfm_footnote_label_tag_name: value.gfm_footnote_label_tag_name,
+            gfm_footnote_label_attributes: value.gfm_footnote_label_attributes,
+            gfm_footnote_back_label: value.gfm_footnote_back_label,
+            gfm_footnote_clobber_prefix: value.gfm_footnote_clobber_prefix,
+            gfm_task_list_item_checkable: value.gfm_task_list_item_checkable,
+            gfm_tagfilter: value.gfm_tagfilter,
+        }
+    }
+}
+
+#[pyfunction]
+#[pyo3(signature = (md, parse_config=None, compile_config=None))]
+fn md_to_html(
+    _py: Python<'_>,
+    md: &str,
+    parse_config: Option<Bound<PyAny>>,
+    compile_config: Option<Bound<PyAny>>,
+) -> PyResult<String> {
+    let parse_options = ParseOptions::from_py(parse_config);
+    let compile_options = CompileOptions::from_py(compile_config);
+
+    let options = markdown::Options {
+        parse: parse_options,
+        compile: compile_options,
+    };
+
+    to_html_with_options(md, &options)
+        .map_err(|e| PyRuntimeError::new_err(format!("Failed to convert markdown to html: {e}")))
+}
+
+#[pyfunction]
+#[pyo3(signature = (json, md_config=None, parse_config=None, compile_config=None))]
+fn json_to_html(
+    py: Python<'_>,
+    json: &str,
+    md_config: Option<Bound<PyAny>>,
+    parse_config: Option<Bound<PyAny>>,
+    compile_config: Option<Bound<PyAny>>,
+) -> PyResult<String> {
+    // mdast current only supports md->html so convert back to md first:
+    let md = json_to_md(py, json, md_config)?;
+    md_to_html(py, &md, parse_config, compile_config)
+}
+
+#[pyfunction]
+#[pyo3(signature = (dict, md_config=None, parse_config=None, compile_config=None))]
+fn ast_to_html(
+    py: Python<'_>,
+    dict: Bound<PyDict>,
+    md_config: Option<Bound<PyAny>>,
+    parse_config: Option<Bound<PyAny>>,
+    compile_config: Option<Bound<PyAny>>,
+) -> PyResult<String> {
+    // mdast current only supports md->html so convert back to md first:
+    let md = ast_to_md(py, dict, md_config)?;
+    md_to_html(py, &md, parse_config, compile_config)
+}
+
 #[pymodule]
 fn mdast(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(md_to_json, m)?)?;
     m.add_function(wrap_pyfunction!(json_to_md, m)?)?;
     m.add_function(wrap_pyfunction!(md_to_ast, m)?)?;
     m.add_function(wrap_pyfunction!(ast_to_md, m)?)?;
+    m.add_function(wrap_pyfunction!(md_to_html, m)?)?;
+    m.add_function(wrap_pyfunction!(json_to_html, m)?)?;
+    m.add_function(wrap_pyfunction!(ast_to_html, m)?)?;
     Ok(())
 }
