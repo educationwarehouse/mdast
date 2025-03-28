@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## 0.2.1 (2025-03-28)
+
+### Fix
+
+* support Python 3.8 by adding `from __future__ import annotations`
+
 ## 0.2.0 (2025-03-26)
 
 ### Feature
